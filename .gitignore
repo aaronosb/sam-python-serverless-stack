@@ -1,0 +1,14 @@
+#Python3 Virtual Environment for project
+/venv
+
+#AWS Toolkit built directory
+/.aws-sam
+
+### Python ###
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+#PyCharm
+.idea/

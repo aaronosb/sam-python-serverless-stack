@@ -1,0 +1,525 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+    sam-python-serverless-stack
+
+    SAM Template for https://serverless-stack.com Demo Notes Application
+
+    Project repo: https://github.com/aaronosb/sam-python-serverless-stack/
+Globals:
+    Function:
+        Timeout: 3
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    Description: Stage name
+  tableName:
+    Type: String
+    Default: notesdb
+    Description: Base name for DynamoDB Table
+  tableThroughput:
+    Type: Number
+    Default: 1
+    Description: Table r/w units
+Metadata:
+      AWS::CloudFormation::Interface:
+        ParameterGroups:
+          - Label:
+              default: "Website Configuration"
+            Parameters:
+              - Stage
+              - tableName
+              - tableThroughput
+        ParameterLabels:
+          Stage:
+            default: "Stage name"
+          tableName:
+            default: "Table Name"
+          tableThroughput:
+            default: "Table r/w units"
+Resources:
+    NotesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: !Sub "${Stage}-${tableName}"
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: noteId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: noteId
+            KeyType: RANGE
+        ProvisionedThroughput:
+          ReadCapacityUnits: !Ref tableThroughput
+          WriteCapacityUnits: !Ref tableThroughput
+    CognitoUserPool:
+      Type: "AWS::Cognito::UserPool"
+      Properties:
+        UserPoolName: !Sub "${Stage}-user-pool"
+        UsernameAttributes:
+          - email
+        AutoVerifiedAttributes:
+          - email
+    CognitoUserPoolClient:
+      Type: "AWS::Cognito::UserPoolClient"
+      Properties:
+        ClientName: !Sub "${Stage}-user-pool-client"
+        UserPoolId:
+          Ref: CognitoUserPool
+        ExplicitAuthFlows:
+          - ADMIN_NO_SRP_AUTH
+        GenerateSecret: false
+    CognitoIdPool:
+      Type: "AWS::Cognito::IdentityPool"
+      Properties:
+        IdentityPoolName: !Sub "${Stage}IdentityPool"
+        AllowUnauthenticatedIdentities: false
+        CognitoIdentityProviders:
+          -
+            ClientId: !Ref CognitoUserPoolClient
+            ProviderName: !GetAtt CognitoUserPool.ProviderName
+    NotesApi:
+      Type: AWS::Serverless::Api
+      Properties:
+        StageName: !Ref Stage
+        DefinitionBody:
+          swagger: "2.0"
+          info:
+            version: "2017-04-26T03:23:48Z"
+            title: !Sub "${Stage}NoteAPI"
+          basePath: !Sub "/${Stage}"
+          schemes:
+            - "https"
+          paths:
+            /notes:
+              get:
+                consumes:
+                  - "application/json"
+                produces:
+                  - "application/json"
+                responses:
+                  "200":
+                    description: "200 response"
+                    schema:
+                      $ref: "#/definitions/Empty"
+                    headers:
+                      Access-Control-Allow-Origin:
+                        type: "string"
+                security:
+                  - sigv4: []
+                x-amazon-apigateway-integration:
+                  responses:
+                    default:
+                      statusCode: "200"
+                      responseParameters:
+                        method.response.header.Access-Control-Allow-Origin: "'*'"
+                  uri:
+                    Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ListFunction.Arn}/invocations
+                  passthroughBehavior: "when_no_templates"
+                  httpMethod: "POST"
+                  contentHandling: "CONVERT_TO_TEXT"
+                  type: "AWS_PROXY"
+              post:
+                consumes:
+                  - "application/json"
+                produces:
+                  - "application/json"
+                responses:
+                  "200":
+                    description: "200 response"
+                    schema:
+                      $ref: "#/definitions/Empty"
+                    headers:
+                      Access-Control-Allow-Origin:
+                        type: "string"
+                security:
+                  - sigv4: []
+                x-amazon-apigateway-integration:
+                  responses:
+                    default:
+                      statusCode: "200"
+                      responseParameters:
+                        method.response.header.Access-Control-Allow-Origin: "'*'"
+                  uri:
+                    Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateFunction.Arn}/invocations
+                  passthroughBehavior: "when_no_templates"
+                  httpMethod: "POST"
+                  contentHandling: "CONVERT_TO_TEXT"
+                  type: "AWS_PROXY"
+              options:
+                consumes:
+                  - "application/json"
+                produces:
+                  - "application/json"
+                responses:
+                  "200":
+                    description: "200 response"
+                    schema:
+                      $ref: "#/definitions/Empty"
+                    headers:
+                      Access-Control-Allow-Origin:
+                        type: "string"
+                      Access-Control-Allow-Methods:
+                        type: "string"
+                      Access-Control-Allow-Headers:
+                        type: "string"
+                x-amazon-apigateway-integration:
+                  responses:
+                    default:
+                      statusCode: "200"
+                      responseParameters:
+                        method.response.header.Access-Control-Allow-Methods: "'POST,GET,OPTIONS'"
+                        method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                        method.response.header.Access-Control-Allow-Origin: "'*'"
+                  requestTemplates:
+                    application/json: "{\"statusCode\": 200}"
+                  passthroughBehavior: "when_no_match"
+                  type: "mock"
+            /notes/{id}:
+              get:
+                consumes:
+                  - "application/json"
+                produces:
+                  - "application/json"
+                responses:
+                  "200":
+                    description: "200 response"
+                    schema:
+                      $ref: "#/definitions/Empty"
+                    headers:
+                      Access-Control-Allow-Origin:
+                        type: "string"
+                security:
+                  - sigv4: []
+                x-amazon-apigateway-integration:
+                  responses:
+                    default:
+                      statusCode: "200"
+                      responseParameters:
+                        method.response.header.Access-Control-Allow-Origin: "'*'"
+                  uri:
+                    Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetFunction.Arn}/invocations
+                  passthroughBehavior: "when_no_templates"
+                  httpMethod: "POST"
+                  contentHandling: "CONVERT_TO_TEXT"
+                  type: "AWS_PROXY"
+              put:
+                consumes:
+                  - "application/json"
+                produces:
+                  - "application/json"
+                responses:
+                  "200":
+                    description: "200 response"
+                    schema:
+                      $ref: "#/definitions/Empty"
+                    headers:
+                      Access-Control-Allow-Origin:
+                        type: "string"
+                security:
+                  - sigv4: []
+                x-amazon-apigateway-integration:
+                  responses:
+                    default:
+                      statusCode: "200"
+                      responseParameters:
+                        method.response.header.Access-Control-Allow-Origin: "'*'"
+                  uri:
+                    Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateFunction.Arn}/invocations
+                  passthroughBehavior: "when_no_templates"
+                  httpMethod: "POST"
+                  contentHandling: "CONVERT_TO_TEXT"
+                  type: "AWS_PROXY"
+              delete:
+                consumes:
+                  - "application/json"
+                produces:
+                  - "application/json"
+                responses:
+                  "200":
+                    description: "200 response"
+                    schema:
+                      $ref: "#/definitions/Empty"
+                    headers:
+                      Access-Control-Allow-Origin:
+                        type: "string"
+                security:
+                  - sigv4: []
+                x-amazon-apigateway-integration:
+                  responses:
+                    default:
+                      statusCode: "200"
+                      responseParameters:
+                        method.response.header.Access-Control-Allow-Origin: "'*'"
+                  uri:
+                    Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteFunction.Arn}/invocations
+                  passthroughBehavior: "when_no_templates"
+                  httpMethod: "POST"
+                  contentHandling: "CONVERT_TO_TEXT"
+                  type: "AWS_PROXY"
+              options:
+                consumes:
+                  - "application/json"
+                produces:
+                  - "application/json"
+                responses:
+                  "200":
+                    description: "200 response"
+                    schema:
+                      $ref: "#/definitions/Empty"
+                    headers:
+                      Access-Control-Allow-Origin:
+                        type: "string"
+                      Access-Control-Allow-Methods:
+                        type: "string"
+                      Access-Control-Allow-Headers:
+                        type: "string"
+                x-amazon-apigateway-integration:
+                  responses:
+                    default:
+                      statusCode: "200"
+                      responseParameters:
+                        method.response.header.Access-Control-Allow-Methods: "'GET,PUT,DELETE,OPTIONS'"
+                        method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                        method.response.header.Access-Control-Allow-Origin: "'*'"
+                  requestTemplates:
+                    application/json: "{\"statusCode\": 200}"
+                  passthroughBehavior: "when_no_match"
+                  type: "mock"
+          securityDefinitions:
+            sigv4:
+              type: "apiKey"
+              name: "Authorization"
+              in: "header"
+              x-amazon-apigateway-authtype: "awsSigv4"
+    CreateFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            CodeUri: lambda/
+            Handler: create.lambda_handler
+            Runtime: python3.6
+            Policies:
+              - Version: '2012-10-17'
+                Statement:
+                  - Effect: Allow
+                    Action:
+                      - dynamodb:DescribeTable
+                      - dynamodb:Query
+                      - dynamodb:Scan
+                      - dynamodb:GetItem
+                      - dynamodb:PutItem
+                      - dynamodb:UpdateItem
+                      - dynamodb:DeleteItem
+                    Resource:
+                      - !GetAtt NotesTable.Arn
+            Environment:
+                Variables:
+                    tableName: !Ref NotesTable
+            Events:
+                Lambda:
+                    Type: Api
+                    Properties:
+                        Path: /notes
+                        Method: post
+                        RestApiId:
+                          Ref: NotesApi
+    GetFunction:
+      Type: AWS::Serverless::Function
+      Properties:
+        CodeUri: lambda/
+        Handler: get.lambda_handler
+        Runtime: python3.6
+        Policies:
+          - Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:DescribeTable
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource:
+                  - !GetAtt NotesTable.Arn
+        Environment:
+          Variables:
+            tableName: !Ref NotesTable
+        Events:
+          Lambda:
+            Type: Api
+            Properties:
+              Path: /notes/{id}
+              Method: get
+              RestApiId:
+                Ref: NotesApi
+
+    ListFunction:
+      Type: AWS::Serverless::Function
+      Properties:
+        CodeUri: lambda/
+        Handler: list.lambda_handler
+        Runtime: python3.6
+        Policies:
+          - Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:DescribeTable
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource:
+                  - !GetAtt NotesTable.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup,
+                  - logs:CreateLogStream,
+                  - logs:DescribeLogGroups,
+                  - logs:DescribeLogStreams,
+                  - logs:PutLogEvents,
+                  - logs:GetLogEvents,
+                  - logs:FilterLogEvents
+                Resource: "*"
+        Environment:
+          Variables:
+            tableName: !Ref NotesTable
+        Events:
+          Lambda:
+            Type: Api
+            Properties:
+              Path: /notes
+              Method: get
+              RestApiId:
+                Ref: NotesApi
+
+    UpdateFunction:
+      Type: AWS::Serverless::Function
+      Properties:
+        CodeUri: lambda/
+        Handler: update.lambda_handler
+        Runtime: python3.6
+        Policies:
+          - Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:DescribeTable
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource:
+                  - !GetAtt NotesTable.Arn
+        Environment:
+          Variables:
+            tableName: !Ref NotesTable
+        Events:
+          Lambda:
+            Type: Api
+            Properties:
+              Path: /notes/{id}
+              Method: put
+              RestApiId:
+                Ref: NotesApi
+    DeleteFunction:
+      Type: AWS::Serverless::Function
+      Properties:
+        CodeUri: lambda/
+        Handler: delete.lambda_handler
+        Runtime: python3.6
+        Policies:
+          - Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:DescribeTable
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource:
+                  - !GetAtt NotesTable.Arn
+        Environment:
+          Variables:
+            tableName: !Ref NotesTable
+        Events:
+          Lambda:
+            Type: Api
+            Properties:
+              Path: /notes/{id}
+              Method: delete
+              RestApiId:
+                Ref: NotesApi
+    CognitoRole:
+      Type: "AWS::IAM::Role"
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: "Allow"
+              Principal:
+                Federated:
+                  - "cognito-identity.amazonaws.com"
+              Action:
+                - "sts:AssumeRoleWithWebIdentity"
+              Condition:
+                StringEquals:
+                  cognito-identity.amazonaws.com:aud:
+                    - !Ref CognitoIdPool
+                ForAnyValue:StringLike:
+                  cognito-identity.amazonaws.com:amr:
+                    - "authenticated"
+        Path: "/"
+        Policies:
+          - PolicyName: "CognitoAPISAMGoogle"
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: 'Allow'
+                  Action:
+                    - 'mobileanalytics:PutEvents'
+                    - 'cognito-sync:*'
+                    - 'cognito-identity:*'
+                  Resource: '*'
+                - Effect: "Allow"
+                  Action: "execute-api:Invoke"
+                  Resource:
+                    - !Join [ "/", [!Join [ ":", [ "arn:aws:execute-api",!Ref 'AWS::Region',!Ref 'AWS::AccountId',!Ref NotesApi]], "*/*/*"]]
+    CognitoRoleAttach:
+      Type: "AWS::Cognito::IdentityPoolRoleAttachment"
+      Properties:
+        IdentityPoolId: !Ref CognitoIdPool
+        Roles:
+          authenticated: !GetAtt CognitoRole.Arn
+Outputs:
+  ApiUrl:
+    Description: URL of your API endpoint
+    Value: !Sub "https://${NotesApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+  RestApiId:
+    Description: API Gateway API ID
+    Value: !Ref NotesApi
+  CognitoIdentityPool:
+    Description: Cognito Identity Pool
+    Value: !Ref CognitoIdPool
+  CognitoUserPool:
+    Description: Cognito User Pool
+    Value: !Ref CognitoUserPool
+  CognitoUserPoolClient:
+    Description: Cognito User Pool App
+    Value: !Ref CognitoUserPoolClient
+  TableName:
+    Description: Dynamo Table Name
+    Value: !Ref NotesTable
